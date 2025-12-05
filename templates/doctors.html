@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Find Doctors - HealthGuard AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Poppins', 'sans-serif'] },
+                    colors: {
+                        primary: '#0ea5e9',
+                        secondary: '#0f172a',
+                        accent: '#e0f2fe',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Poppins', sans-serif; background: #f8fafc; }
+        .hero-bg {
+            background-image: linear-gradient(to bottom, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.7)), url('https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80');
+            background-size: cover;
+            background-position: center;
+        }
+        .doctor-card:hover { transform: translateY(-5px); }
+        .modal-backdrop { background-color: rgba(15, 23, 42, 0.7); backdrop-filter: blur(4px); }
+        @keyframes popIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        .modal-content { animation: popIn 0.3s ease-out; }
+    </style>
+</head>
+<body class="text-slate-600 antialiased min-h-screen flex flex-col">
+
+    <nav class="fixed w-full z-40 bg-white/90 backdrop-blur-md shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-20">
+                <div class="flex items-center gap-2 cursor-pointer" onclick="window.location.href='/'">
+                    <i class="fa-solid fa-heart-pulse text-3xl text-primary"></i>
+                    <span class="font-bold text-2xl text-secondary">HealthGuard <span class="text-primary">AI</span></span>
+                </div>
+                <div class="flex items-center gap-6">
+                    <a href="/" class="text-secondary hover:text-primary font-medium transition">Home</a>
+                    <a href="/profile" class="text-secondary hover:text-primary font-medium transition">Profile</a>
+                    <a href="/logout" class="text-red-500 hover:text-red-600 font-bold transition">Logout</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <header class="hero-bg pt-32 pb-16">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <h1 class="text-4xl md:text-5xl font-bold text-secondary mb-4">Find Your Specialist</h1>
+            <p class="text-lg text-gray-500 max-w-2xl mx-auto">Browse our directory of top-rated doctors, filter by specialty, and book your appointment instantly.</p>
+        </div>
+    </header>
+
+    <section class="sticky top-20 z-30 bg-white/80 backdrop-blur-md border-b border-gray-100 py-4 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex flex-col md:flex-row gap-4">
+                
+                <div class="relative flex-grow">
+                    <i class="fa-solid fa-magnifying-glass absolute left-4 top-3.5 text-gray-400"></i>
+                    <input type="text" id="search-input" oninput="debounceSearch()" placeholder="Search doctor name or hospital..." class="w-full pl-11 pr-4 py-3 rounded-xl border border-gray-200 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition bg-white">
+                </div>
+
+                <div class="relative min-w-[200px]">
+                    <i class="fa-solid fa-stethoscope absolute left-4 top-3.5 text-gray-400"></i>
+                    <select id="specialty-filter" onchange="fetchDoctors()" class="w-full pl-11 pr-8 py-3 rounded-xl border border-gray-200 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition bg-white appearance-none cursor-pointer">
+                        <option value="All">All Specialties</option>
+                        {% for s in specialties %}
+                        <option value="{{ s }}">{{ s }}</option>
+                        {% endfor %}
+                    </select>
+                    <i class="fa-solid fa-chevron-down absolute right-4 top-4 text-xs text-gray-400 pointer-events-none"></i>
+                </div>
+
+                <div class="relative min-w-[180px]">
+                    <i class="fa-solid fa-sort absolute left-4 top-3.5 text-gray-400"></i>
+                    <select id="sort-filter" onchange="fetchDoctors()" class="w-full pl-11 pr-8 py-3 rounded-xl border border-gray-200 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition bg-white appearance-none cursor-pointer">
+                        <option value="rating">Highest Rated</option>
+                        <option value="price_low">Lowest Price</option>
+                        <option value="price_high">Highest Price</option>
+                    </select>
+                    <i class="fa-solid fa-chevron-down absolute right-4 top-4 text-xs text-gray-400 pointer-events-none"></i>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 w-full">
+        <div id="loading-spinner" class="text-center py-20 hidden">
+            <i class="fa-solid fa-circle-notch fa-spin text-4xl text-primary"></i>
+            <p class="mt-4 text-gray-500">Finding matching doctors...</p>
+        </div>
+
+        <div id="doctor-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            </div>
+        
+        <div id="no-results" class="hidden text-center py-20">
+            <div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-400">
+                <i class="fa-solid fa-user-doctor-slash text-2xl"></i>
+            </div>
+            <h3 class="text-lg font-bold text-secondary">No doctors found</h3>
+            <p class="text-gray-500">Try adjusting your filters or search terms.</p>
+        </div>
+    </main>
+
+    <div id="booking-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center modal-backdrop p-4">
+        <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden modal-content">
+            <div class="bg-secondary p-5 flex justify-between items-center text-white">
+                <h3 class="font-bold text-lg">Book Appointment</h3>
+                <button onclick="closeBookingModal()" class="text-gray-400 hover:text-white transition">
+                    <i class="fa-solid fa-times text-xl"></i>
+                </button>
+            </div>
+            
+            <div class="p-6 space-y-5">
+                <div class="flex items-center gap-4 bg-sky-50 p-3 rounded-xl border border-sky-100">
+                    <img id="modal-doc-img" src="" class="w-14 h-14 rounded-full object-cover border border-white shadow-sm">
+                    <div>
+                        <h4 id="modal-doc-name" class="font-bold text-secondary text-sm">Doctor Name</h4>
+                        <p id="modal-doc-spec" class="text-xs text-primary font-medium">Specialty</p>
+                        <p id="modal-doc-price" class="text-xs text-green-600 font-bold mt-1"></p>
+                    </div>
+                </div>
+
+                <div class="space-y-2">
+                    <label class="block text-xs font-bold text-gray-500 uppercase">Select Date</label>
+                    <input type="date" id="book-date" class="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm focus:border-primary focus:outline-none transition">
+                </div>
+
+                <div class="space-y-2">
+                    <label class="block text-xs font-bold text-gray-500 uppercase">Select Time</label>
+                    <select id="book-time" class="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm focus:border-primary focus:outline-none transition bg-white">
+                        <option value="09:00">09:00 AM</option>
+                        <option value="10:00">10:00 AM</option>
+                        <option value="11:00">11:00 AM</option>
+                        <option value="13:00">01:00 PM</option>
+                        <option value="14:00">02:00 PM</option>
+                        <option value="15:00">03:00 PM</option>
+                        <option value="16:00">04:00 PM</option>
+                    </select>
+                </div>
+
+                <button onclick="confirmBooking()" id="book-btn" class="w-full bg-primary hover:bg-sky-600 text-white font-bold py-3 rounded-xl transition shadow-lg shadow-sky-500/20">
+                    Confirm Booking
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="status-modal" class="hidden fixed inset-0 z-[70] flex items-center justify-center modal-backdrop p-4">
+        <div class="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-6 text-center modal-content relative overflow-hidden">
+            <div id="status-icon-bg" class="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 transition-colors">
+                <i id="status-icon" class="text-3xl"></i>
+            </div>
+            <h3 id="status-title" class="text-xl font-bold text-secondary mb-2"></h3>
+            <p id="status-message" class="text-sm text-gray-500 mb-6"></p>
+            <button onclick="closeStatusModal()" class="w-full py-3 rounded-xl font-bold transition text-white shadow-lg" id="status-btn">Okay</button>
+        </div>
+    </div>
+
+    <script>
+        let debounceTimer;
+        let selectedDoctor = null;
+
+        function debounceSearch() {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(fetchDoctors, 300);
+        }
+
+        async function fetchDoctors() {
+            const query = document.getElementById('search-input').value;
+            const specialty = document.getElementById('specialty-filter').value;
+            const sort = document.getElementById('sort-filter').value;
+            
+            const grid = document.getElementById('doctor-grid');
+            const spinner = document.getElementById('loading-spinner');
+            const noResults = document.getElementById('no-results');
+
+            grid.innerHTML = '';
+            grid.classList.add('hidden');
+            noResults.classList.add('hidden');
+            spinner.classList.remove('hidden');
+
+            try {
+                const res = await fetch('/api/doctors/search', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ query, specialty, sort })
+                });
+                const data = await res.json();
+
+                spinner.classList.add('hidden');
+                grid.classList.remove('hidden');
+
+                if (data.status === 'success' && data.doctors.length > 0) {
+                    renderDoctors(data.doctors);
+                } else {
+                    noResults.classList.remove('hidden');
+                }
+
+            } catch (e) {
+                console.error(e);
+                spinner.classList.add('hidden');
+                alert("Error loading doctors.");
+            }
+        }
+
+        function renderDoctors(doctors) {
+            const grid = document.getElementById('doctor-grid');
+            let html = '';
+
+            doctors.forEach(doc => {
+                // Escape simple quotes for the onclick handler
+                const safeName = doc.name.replace(/'/g, "\\'");
+                const safeSpec = doc.specialty.replace(/'/g, "\\'");
+                const safeHosp = doc.hospital.replace(/'/g, "\\'");
+                const safeImg = doc.image; 
+
+                html += `
+                <div class="doctor-card bg-white rounded-2xl border border-gray-100 p-6 shadow-sm hover:shadow-xl transition duration-300 flex flex-col items-center text-center relative group">
+                    <div class="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-md mb-4 group-hover:scale-105 transition duration-300">
+                        <img src="${doc.image}" alt="${doc.name}" class="w-full h-full object-cover">
+                    </div>
+                    
+                    <h3 class="font-bold text-lg text-secondary mb-1">${doc.name}</h3>
+                    <span class="bg-sky-50 text-primary text-xs font-bold px-3 py-1 rounded-full mb-3">${doc.specialty}</span>
+                    
+                    <p class="text-sm text-gray-500 mb-4 flex items-center justify-center gap-2">
+                        <i class="fa-regular fa-hospital"></i> ${doc.hospital}
+                    </p>
+                    
+                    <div class="w-full border-t border-gray-50 pt-4 mt-auto flex justify-between items-center px-2">
+                        <div class="text-left">
+                            <p class="text-[10px] text-gray-400 uppercase font-bold">Rating</p>
+                            <p class="text-sm font-bold text-secondary flex items-center gap-1">
+                                <i class="fa-solid fa-star text-yellow-400 text-xs"></i> ${doc.rating}
+                            </p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-[10px] text-gray-400 uppercase font-bold">Consultation</p>
+                            <p class="text-sm font-bold text-green-600">Rp ${doc.price.toLocaleString('id-ID')}</p>
+                        </div>
+                    </div>
+
+                    <button onclick="openBookingModal('${safeName}', '${safeSpec}', '${safeHosp}', ${doc.price}, '${safeImg}')" class="w-full mt-5 bg-secondary hover:bg-primary text-white font-semibold py-2.5 rounded-xl transition duration-300 shadow-lg shadow-gray-200 hover:shadow-sky-200">
+                        Book Appointment
+                    </button>
+                </div>
+                `;
+            });
+
+            grid.innerHTML = html;
+        }
+
+        // --- BOOKING LOGIC ---
+        function openBookingModal(name, specialty, hospital, price, image) {
+            selectedDoctor = { name, specialty, hospital, price, image };
+            
+            document.getElementById('modal-doc-name').innerText = name;
+            document.getElementById('modal-doc-spec').innerText = specialty;
+            document.getElementById('modal-doc-price').innerText = "Rp " + price.toLocaleString('id-ID');
+            document.getElementById('modal-doc-img').src = image;
+            
+            // Set default date to tomorrow
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            document.getElementById('book-date').valueAsDate = tomorrow;
+
+            document.getElementById('booking-modal').classList.remove('hidden');
+        }
+
+        function closeBookingModal() {
+            document.getElementById('booking-modal').classList.add('hidden');
+        }
+
+        async function confirmBooking() {
+            const btn = document.getElementById('book-btn');
+            const date = document.getElementById('book-date').value;
+            const time = document.getElementById('book-time').value;
+
+            if(!date || !time) return alert("Please select date and time");
+
+            btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Booking...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/api/appointments/book', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        doctor_name: selectedDoctor.name,
+                        doctor_specialty: selectedDoctor.specialty,
+                        doctor_image: selectedDoctor.image,
+                        hospital: selectedDoctor.hospital,
+                        price: selectedDoctor.price,
+                        date: date,
+                        time: time
+                    })
+                });
+                const data = await res.json();
+
+                if(data.status === 'success') {
+                    closeBookingModal();
+                    openStatusModal('success', 'Booking Confirmed!', 'Your appointment has been scheduled successfully.', null);
+                } else {
+                    openStatusModal('error', 'Booking Failed', 'Could not book appointment.', null);
+                }
+            } catch(e) {
+                console.error("Booking Error:", e);
+                // More detailed error message
+                openStatusModal('error', 'System Error', 'Could not process request. Check console for details.', null);
+            } finally {
+                btn.innerHTML = 'Confirm Booking';
+                btn.disabled = false;
+            }
+        }
+
+        // --- STATUS MODAL ---
+        function openStatusModal(type, title, message, callback) {
+            const modal = document.getElementById('status-modal');
+            const iconBg = document.getElementById('status-icon-bg');
+            const icon = document.getElementById('status-icon');
+            const titleEl = document.getElementById('status-title');
+            const msgEl = document.getElementById('status-message');
+            const btn = document.getElementById('status-btn');
+
+            titleEl.innerText = title;
+            msgEl.innerText = message;
+
+            if (type === 'success') {
+                iconBg.className = "w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 bg-green-100 text-green-500";
+                icon.className = "fa-solid fa-check";
+                btn.className = "w-full py-3 rounded-xl font-bold transition text-white shadow-lg bg-green-500 hover:bg-green-600 shadow-green-500/30";
+            } else {
+                iconBg.className = "w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 bg-red-100 text-red-500";
+                icon.className = "fa-solid fa-xmark";
+                btn.className = "w-full py-3 rounded-xl font-bold transition text-white shadow-lg bg-red-500 hover:bg-red-600 shadow-red-500/30";
+            }
+
+            modal.classList.remove('hidden');
+            btn.onclick = () => {
+                modal.classList.add('hidden');
+                if(callback) callback();
+            };
+        }
+
+        function closeStatusModal() {
+            document.getElementById('status-modal').classList.add('hidden');
+        }
+
+        // Initial Load
+        document.addEventListener('DOMContentLoaded', fetchDoctors);
+    </script>
+</body>
+</html>

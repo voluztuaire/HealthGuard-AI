@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HealthGuard AI - Smart Healthcare</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Poppins', 'sans-serif'],
+                    },
+                    colors: {
+                        primary: '#0ea5e9',   /* Medical Blue */
+                        secondary: '#0f172a', /* Dark Navy */
+                        accent: '#e0f2fe',    /* Light Blue */
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* Custom CSS Overrides */
+        body {
+            font-family: 'Poppins', sans-serif;
+            overflow-x: hidden;
+        }
+        
+        /* Hero Background with Overlay */
+        .hero-bg {
+            background-image: linear-gradient(to right, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.6)), url('https://images.unsplash.com/photo-1505751172876-fa1923c5c528?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80');
+            background-size: cover;
+            background-position: center;
+        }
+
+        .service-card {
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .service-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Dropdown Animation */
+        .dropdown-enter {
+            animation: fadeIn 0.2s ease-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="text-slate-600 antialiased">
+
+    <nav class="fixed w-full z-50 bg-white/90 backdrop-blur-md shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-20">
+                <div class="flex-shrink-0 flex items-center gap-2 cursor-pointer" onclick="window.location.href='/'">
+                    <i class="fa-solid fa-heart-pulse text-3xl text-primary"></i>
+                    <span class="font-bold text-2xl text-secondary">HealthGuard <span class="text-primary">AI</span></span>
+                </div>
+
+                <div class="hidden md:flex space-x-8 items-center">
+                    <a href="#" class="text-secondary hover:text-primary font-medium transition">Home</a>
+                    <a href="#about" class="text-gray-500 hover:text-primary font-medium transition">About AI</a>
+                    <a href="#services" class="text-gray-500 hover:text-primary font-medium transition">Services</a>
+                </div>
+
+                <div class="hidden md:flex items-center gap-4">
+                    {% if user_name %}
+                        <div class="relative">
+                            <button id="user-menu-btn" onclick="toggleUserMenu()" class="flex items-center gap-3 focus:outline-none group">
+                                <div class="text-right hidden lg:block">
+                                    <p class="text-xs text-gray-500 font-medium">Welcome,</p>
+                                    <p class="text-sm font-bold text-secondary group-hover:text-primary transition">{{ user_name }}</p>
+                                </div>
+                                <div class="w-10 h-10 rounded-full bg-sky-100 flex items-center justify-center text-primary border-2 border-white shadow-sm group-hover:border-sky-200 transition">
+                                    <i class="fa-solid fa-user text-lg"></i>
+                                </div>
+                                <i class="fa-solid fa-chevron-down text-gray-400 text-xs group-hover:text-primary transition"></i>
+                            </button>
+
+                            <div id="user-dropdown" class="hidden absolute right-0 mt-3 w-48 bg-white rounded-xl shadow-xl border border-gray-100 py-2 z-50 dropdown-enter">
+                                <a href="{{ url_for('profile_page') }}" class="flex items-center gap-2 px-4 py-3 text-sm text-gray-700 hover:bg-slate-50 hover:text-primary transition">
+                                    <i class="fa-regular fa-id-card w-5"></i> My Dashboard
+                                </a>
+                                <div class="border-t border-gray-50 my-1"></div>                                <a href="{{ url_for('logout') }}" class="flex items-center gap-2 px-4 py-3 text-sm text-red-500 hover:bg-red-50 hover:text-red-600 transition font-medium">
+                                    <i class="fa-solid fa-right-from-bracket w-5"></i> Logout
+                                </a>
+                            </div>
+                        </div>
+                    {% else %}
+                        <a href="{{ url_for('auth_page') }}" class="bg-primary hover:bg-sky-600 text-white px-6 py-2.5 rounded-full font-medium transition shadow-lg shadow-sky-500/30">
+                            Sign In
+                        </a>
+                    {% endif %}
+                </div>
+
+                <div class="md:hidden flex items-center">
+                    <button onclick="toggleMobileMenu()" class="text-gray-500 hover:text-secondary focus:outline-none">
+                        <i class="fa-solid fa-bars text-2xl"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div id="mobile-menu" class="hidden md:hidden bg-white border-t">
+            <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
+                <a href="#" class="block px-3 py-2 text-secondary font-medium">Home</a>
+                <a href="#about" class="block px-3 py-2 text-gray-500">About AI</a>
+                <a href="#services" class="block px-3 py-2 text-gray-500">Services</a>
+                
+                {% if user_name %}
+                    <div class="border-t border-gray-100 mt-2 pt-2">
+                        <div class="px-3 py-2 flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-full bg-sky-100 flex items-center justify-center text-primary font-bold">
+                                <i class="fa-solid fa-user"></i>
+                            </div>
+                            <p class="text-sm font-bold text-secondary">{{ user_name }}</p>
+                        </div>
+                        <a href="/profile" class="block px-3 py-2 text-gray-500 font-medium">My Dashboard</a>
+                        <a href="{{ url_for('logout') }}" class="block px-3 py-2 text-red-500 font-medium">Logout</a>
+                    </div>
+                {% else %}
+                    <a href="{{ url_for('auth_page') }}" class="block px-3 py-2 text-primary font-bold">Sign In</a>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <header class="hero-bg relative pt-32 pb-20 lg:pt-48 lg:pb-32">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
+            <div class="lg:w-1/2 relative z-10">
+                <div class="inline-block bg-sky-100 text-primary px-4 py-1 rounded-full text-sm font-semibold mb-6">
+                    CONFIDENT HEALTH BEGINS HERE
+                </div>
+                <h1 class="text-5xl lg:text-6xl font-bold text-secondary leading-tight mb-6">
+                    Healthcare Reimagined With <span class="text-primary">AI Precision</span>
+                </h1>
+                <p class="text-lg text-gray-500 mb-8 leading-relaxed">
+                    Our dedicated team of professionals and advanced AI algorithms are committed to delivering personalized, high-quality medical analysis in a comfortable & friendly digital environment.
+                </p>
+                <div class="flex flex-col sm:flex-row gap-4 relative z-20">
+                    <a href="{{ url_for('chat_page') if user_name else url_for('auth_page') }}" class="inline-flex items-center justify-center bg-primary hover:bg-sky-600 text-white px-8 py-4 rounded-lg font-semibold transition shadow-xl shadow-sky-500/20 cursor-pointer">
+                        <i class="fa-solid fa-robot mr-2"></i> Start AI Checkup
+                    </a>
+                    
+                    <a href="/doctors" class="flex items-center justify-center gap-3 px-8 py-4 text-secondary font-semibold hover:text-primary transition cursor-pointer">
+                        <div class="w-10 h-10 bg-white rounded-full shadow-md flex items-center justify-center text-primary">
+                            <i class="fa-solid fa-user-doctor ml-1"></i>
+                        </div>
+                        Find a Doctor
+                    </a>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <section id="about" class="py-20 bg-white relative z-10">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+                
+                <div class="relative">
+                    <img src="https://media.istockphoto.com/id/1319031310/photo/doctor-writing-a-medical-prescription.jpg?s=612x612&w=0&k=20&c=DWZGM8lBb5Bun7cbxhKT1ruVxRC_itvFzA9jxgoA0N8=" alt="Medical Technology" class="rounded-tl-[100px] rounded-br-[100px] rounded-tr-3xl rounded-bl-3xl shadow-2xl w-full object-cover h-[500px]">
+                    <div class="absolute -bottom-6 -right-6 text-primary text-9xl opacity-20">
+                        <i class="fa-solid fa-stethoscope"></i>
+                    </div>
+                </div>
+
+                <div>
+                    <span class="bg-sky-50 text-primary px-3 py-1 rounded text-xs font-bold uppercase tracking-wide border border-sky-100">Our Mission</span>
+                    <h2 class="text-4xl font-bold text-secondary mt-4 mb-6">Pioneering the Future of Diagnostic Intelligence</h2>
+                    <p class="text-gray-500 mb-6 leading-relaxed">
+                        HealthGuard AI integrates clinical expertise with state-of-the-art machine learning algorithms to facilitate preliminary assessments. We are dedicated to bridging the gap between patient symptoms and specialist care through secure, data-driven analysis and streamlined scheduling.
+                    </p>
+                    
+                    <a href="#" class="inline-block border border-gray-300 text-secondary px-8 py-3 rounded-lg font-medium hover:bg-secondary hover:text-white transition mb-12">
+                        Read Full Protocol
+                    </a>
+
+                    <div class="grid grid-cols-3 gap-8 border-t border-gray-100 pt-8">
+                        <div>
+                            <h3 class="text-3xl font-bold text-secondary">24/7</h3>
+                            <p class="text-sm text-gray-500 mt-1 font-medium">System Availability</p>
+                        </div>
+                        <div>
+                            <h3 class="text-3xl font-bold text-secondary">98%</h3>
+                            <p class="text-sm text-gray-500 mt-1 font-medium">User Satisfaction</p>
+                        </div>
+                        <div>
+                            <h3 class="text-3xl font-bold text-secondary">ISO</h3>
+                            <p class="text-sm text-gray-500 mt-1 font-medium">Standard Security</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="services" class="py-20 bg-slate-50 relative z-10">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex flex-col md:flex-row justify-between items-end mb-12">
+                <div class="max-w-2xl">
+                    <span class="bg-gray-200 text-gray-600 px-3 py-1 rounded text-xs font-bold uppercase tracking-wide">Our Services</span>
+                    <h2 class="text-4xl font-bold text-secondary mt-4">Your Complete Guide to <br> Digital Health</h2>
+                </div>
+                <div class="flex gap-2 mt-4 md:mt-0">
+                    <button class="w-10 h-10 rounded-full border border-gray-300 flex items-center justify-center hover:bg-primary hover:text-white transition hover:border-primary">
+                        <i class="fa-solid fa-arrow-left"></i>
+                    </button>
+                    <button class="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center hover:bg-sky-600 transition shadow-lg shadow-sky-500/30">
+                        <i class="fa-solid fa-arrow-right"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                {% for service in services %}
+                <div class="service-card group bg-white rounded-2xl overflow-hidden p-6 border border-gray-100 flex flex-col h-full">
+                    
+                    <div class="flex items-center justify-between mb-6">
+                        <div class="w-12 h-12 bg-sky-50 rounded-full flex items-center justify-center text-primary text-xl group-hover:bg-primary group-hover:text-white transition-colors duration-300">
+                            <i class="fa-solid {{ service.icon }}"></i>
+                        </div>
+                        <i class="fa-solid fa-arrow-up-right-from-square text-gray-300 group-hover:text-primary transition"></i>
+                    </div>
+                    
+                    <h3 class="text-xl font-bold text-secondary mb-3">{{ service.title }}</h3>
+                    <p class="text-sm text-gray-500 mb-6 leading-relaxed flex-grow">
+                        {{ service.desc }}
+                    </p>
+                    
+                    <div class="relative h-40 bg-sky-50 rounded-xl overflow-hidden mt-auto group-hover:bg-sky-100 transition-colors duration-300">
+                        
+                        <div class="absolute -right-6 -bottom-6 text-primary/10 group-hover:text-primary/20 transition-all duration-500 transform group-hover:scale-110">
+                            <i class="fa-solid {{ service.icon }} text-9xl"></i>
+                        </div>
+
+                        <div class="absolute bottom-5 left-5 z-10">
+                            <a href="#" class="inline-flex items-center font-semibold text-primary group-hover:text-sky-700 transition">
+                                Learn More 
+                                <i class="fa-solid fa-arrow-right ml-2 text-sm transform group-hover:translate-x-1 transition-transform"></i>
+                            </a>
+                        </div>
+                    </div>
+
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </section>
+
+    <footer class="bg-secondary text-white py-12 relative z-10">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex flex-col md:flex-row justify-between items-center">
+                <div class="flex items-center gap-2 mb-4 md:mb-0">
+                    <i class="fa-solid fa-heart-pulse text-2xl text-primary"></i>
+                    <span class="font-bold text-xl">HealthGuard AI</span>
+                </div>
+                <div class="text-gray-400 text-sm">
+                    &copy; 2025 HealthGuard AI. All rights reserved.
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        function toggleMobileMenu() {
+            const menu = document.getElementById('mobile-menu');
+            menu.classList.toggle('hidden');
+        }
+
+        function toggleUserMenu() {
+            const menu = document.getElementById('user-dropdown');
+            menu.classList.toggle('hidden');
+        }
+
+        // Close Dropdown if clicked outside
+        window.addEventListener('click', function(e) {
+            const button = document.getElementById('user-menu-btn');
+            const menu = document.getElementById('user-dropdown');
+            
+            if (button && menu) {
+                if (!button.contains(e.target) && !menu.contains(e.target)) {
+                    menu.classList.add('hidden');
+                }
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Companion - HealthGuard</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Poppins', 'sans-serif'] },
+                    colors: { 
+                        primary: '#0ea5e9', 
+                        secondary: '#0f172a' 
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Poppins', sans-serif; background: #f8fafc; }
+        
+        .chat-bubble { 
+            max-width: 80%; 
+            padding: 1rem; 
+            border-radius: 1rem; 
+            margin-bottom: 1rem; 
+            animation: popIn 0.3s ease-out; 
+        }
+        
+        .ai-bubble { 
+            background: white; 
+            color: #334155; 
+            border-top-left-radius: 0; 
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05); 
+            border: 1px solid #f1f5f9;
+        }
+        
+        .user-bubble { 
+            background: #0ea5e9; 
+            color: white; 
+            border-top-right-radius: 0; 
+            margin-left: auto; 
+            box-shadow: 0 4px 6px -1px rgba(14, 165, 233, 0.2);
+        }
+        
+        @keyframes popIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* Custom Scrollbar */
+        #chat-container::-webkit-scrollbar { width: 6px; }
+        #chat-container::-webkit-scrollbar-track { background: #f8fafc; }
+        #chat-container::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        #chat-container::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        .history-item:hover { background-color: rgba(255, 255, 255, 0.1); }
+        .history-item.active { background-color: rgba(14, 165, 233, 0.2); border-left: 3px solid #0ea5e9; }
+        .delete-btn { opacity: 0; transition: opacity 0.2s; }
+        .history-item:hover .delete-btn { opacity: 1; }
+
+        .modal-backdrop {
+            background-color: rgba(15, 23, 42, 0.7);
+            backdrop-filter: blur(4px);
+        }
+        .modal-content { animation: popIn 0.3s ease-out; }
+    </style>
+</head>
+<body class="h-screen flex flex-col md:flex-row overflow-hidden bg-slate-50">
+
+    <aside class="w-full md:w-72 bg-secondary text-white p-4 flex flex-col justify-between z-20 hidden md:flex shadow-xl border-r border-slate-700">
+        <div class="flex flex-col h-full">
+            <div class="flex items-center gap-2 mb-6 cursor-pointer hover:opacity-80 transition px-2" onclick="window.location.href='/'">
+                <i class="fa-solid fa-heart-pulse text-2xl text-primary"></i>
+                <span class="font-bold text-xl tracking-wide">HealthGuard</span>
+            </div>
+            
+            <button onclick="startNewChat()" class="w-full flex items-center gap-3 bg-primary hover:bg-sky-600 text-white px-4 py-3 rounded-xl font-medium transition mb-6 shadow-lg shadow-sky-900/20">
+                <i class="fa-solid fa-plus"></i> New Consultation
+            </button>
+
+            <div class="flex-1 overflow-y-auto pr-2 space-y-1" id="history-list">
+                <p class="text-xs text-gray-500 font-bold uppercase tracking-wider mb-2 px-2">History</p>
+                
+                {% for chat in history %}
+                <div id="hist-{{ chat.session_id }}" onclick="loadHistory('{{ chat.session_id }}')" class="history-item cursor-pointer p-3 rounded-lg transition flex items-center justify-between group relative">
+                    <div class="flex items-center gap-3 overflow-hidden">
+                        <i class="fa-regular fa-message text-gray-400 group-hover:text-white text-sm"></i>
+                        <div class="overflow-hidden">
+                            <p class="text-sm font-medium truncate text-gray-200 group-hover:text-white">{{ chat.title }}</p>
+                            <p class="text-[10px] text-gray-500">{{ chat.timestamp }}</p>
+                        </div>
+                    </div>
+                    <button onclick="confirmDelete(event, '{{ chat.session_id }}')" class="delete-btn text-gray-400 hover:text-red-500 p-1 rounded transition z-10">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        
+        <div class="border-t border-slate-700 pt-4 mt-4 px-2">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold border border-primary/30">
+                    <i class="fa-solid fa-user"></i>
+                </div>
+                <div class="overflow-hidden">
+                    <p class="text-xs text-gray-400">Logged in as</p>
+                    <p class="font-bold text-sm truncate w-32 text-white">{{ user_name }}</p>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <main class="flex-1 flex flex-col h-full relative min-h-0 bg-[#f8fafc]">
+        
+        <header class="bg-white/90 backdrop-blur-md h-16 border-b border-slate-200 flex items-center px-6 justify-between shadow-sm z-10 flex-shrink-0">
+            <div class="flex items-center gap-4">
+                <button class="md:hidden text-secondary hover:text-primary transition" onclick="window.location.href='/'">
+                    <i class="fa-solid fa-arrow-left text-xl"></i>
+                </button>
+                
+                <div class="flex items-center gap-2">
+                    <div class="relative">
+                        <div class="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse"></div>
+                        <div class="w-2.5 h-2.5 rounded-full bg-green-500 absolute top-0 left-0 animate-ping opacity-75"></div>
+                    </div>
+                    <span class="font-bold text-secondary text-lg">AI Health Companion</span>
+                </div>
+            </div>
+        </header>
+
+        <div id="chat-container" class="flex-1 overflow-y-auto p-6 md:p-10 scroll-smooth">
+            <div class="chat-bubble ai-bubble">
+                <div class="flex items-center gap-2 mb-2">
+                    <i class="fa-solid fa-robot text-primary"></i>
+                    <p class="font-bold text-secondary text-xs uppercase tracking-wide">HealthGuard AI</p>
+                </div>
+                <p>Hello, {{ user_name }}. I can analyze multiple body locations. Let's start the checkup.</p>
+            </div>
+        </div>
+
+        <div class="w-full bg-white border-t border-slate-100 p-6 z-20 flex-shrink-0 shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
+            <div id="input-area" class="max-w-4xl mx-auto min-h-[60px] flex items-center justify-center flex-wrap gap-3">
+                <button onclick="startCheckup()" class="bg-primary hover:bg-sky-600 text-white px-8 py-3.5 rounded-full font-semibold shadow-lg shadow-sky-500/30 transition-all transform hover:-translate-y-1">
+                    <i class="fa-solid fa-stethoscope mr-2"></i> Start Diagnosis
+                </button>
+            </div>
+        </div>
+
+    </main>
+
+    <div id="delete-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center modal-backdrop p-4">
+        <div class="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-6 text-center animate-[popIn_0.3s_ease-out]">
+            <div class="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-red-500">
+                <i class="fa-solid fa-triangle-exclamation text-xl"></i>
+            </div>
+            <h3 class="text-lg font-bold text-secondary mb-2">Delete Chat History?</h3>
+            <p class="text-sm text-gray-500 mb-6">This action cannot be undone. Are you sure you want to remove this session?</p>
+            <div class="flex gap-3">
+                <button onclick="closeDeleteModal()" class="flex-1 py-2.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 font-medium transition">Cancel</button>
+                <button onclick="performDelete()" class="flex-1 py-2.5 rounded-lg bg-red-500 text-white hover:bg-red-600 font-medium transition shadow-lg shadow-red-500/30">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="schedule-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center modal-backdrop p-4">
+        <div class="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden animate-[popIn_0.3s_ease-out] border border-gray-100">
+            <div class="bg-gradient-to-r from-secondary to-slate-800 p-5 flex justify-between items-center text-white">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center backdrop-blur-sm">
+                        <i class="fa-regular fa-calendar-check text-primary text-xl"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-lg leading-tight">Medication Schedule</h3>
+                        <p class="text-xs text-gray-400">Set automated WhatsApp reminders</p>
+                    </div>
+                </div>
+                <button onclick="closeModal()" class="text-gray-400 hover:text-white transition bg-white/5 hover:bg-white/10 w-8 h-8 rounded-full flex items-center justify-center">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="p-6 space-y-6">
+                <div class="bg-sky-50 p-4 rounded-xl border border-sky-100 flex items-start gap-3">
+                    <i class="fa-solid fa-pills text-primary mt-1"></i>
+                    <div>
+                        <p class="text-xs text-gray-500 font-bold uppercase tracking-wider">Prescription</p>
+                        <p id="modal-med-name" class="text-secondary font-bold text-lg">Paracetamol</p>
+                        <p id="modal-instruction" class="text-sm text-gray-600 italic">Take after food</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-5">
+                    <div class="space-y-2">
+                        <label class="block text-xs font-bold text-gray-500 uppercase">Start Date</label>
+                        <div class="relative">
+                            <i class="fa-regular fa-calendar absolute left-3 top-3 text-gray-400"></i>
+                            <input type="date" id="start-date" class="w-full border border-gray-200 bg-gray-50 rounded-lg pl-9 pr-3 py-2.5 text-sm focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none transition">
+                        </div>
+                    </div>
+                    <div class="space-y-2">
+                        <label class="block text-xs font-bold text-gray-500 uppercase">End Date</label>
+                        <div class="relative">
+                            <i class="fa-solid fa-flag-checkered absolute left-3 top-3 text-gray-400"></i>
+                            <input type="date" id="end-date" class="w-full border border-gray-200 bg-gray-50 rounded-lg pl-9 pr-3 py-2.5 text-sm focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none transition">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="space-y-2">
+                    <label class="block text-xs font-bold text-gray-500 uppercase">Daily Frequency & Times</label>
+                    <div id="time-inputs-container" class="grid grid-cols-2 gap-3">
+                        </div>
+                </div>
+
+                <button onclick="confirmSchedule()" id="confirm-btn" class="w-full bg-primary hover:bg-sky-600 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-sky-500/20 flex items-center justify-center gap-2">
+                    <i class="fa-brands fa-whatsapp text-lg"></i> Confirm & Schedule
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="booking-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center modal-backdrop p-4">
+        <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden modal-content">
+            <div class="bg-secondary p-5 flex justify-between items-center text-white">
+                <h3 class="font-bold text-lg">Book Appointment</h3>
+                <button onclick="closeBookingModal()" class="text-gray-400 hover:text-white transition">
+                    <i class="fa-solid fa-times text-xl"></i>
+                </button>
+            </div>
+            
+            <div class="p-6 space-y-5">
+                <div class="flex items-center gap-4 bg-sky-50 p-3 rounded-xl border border-sky-100">
+                    <img id="modal-doc-img" src="" class="w-14 h-14 rounded-full object-cover border border-white shadow-sm">
+                    <div>
+                        <h4 id="modal-doc-name" class="font-bold text-secondary text-sm">Doctor Name</h4>
+                        <p id="modal-doc-spec" class="text-xs text-primary font-medium">Specialty</p>
+                        <p id="modal-doc-price" class="text-xs text-green-600 font-bold mt-1"></p>
+                    </div>
+                </div>
+
+                <div class="space-y-2">
+                    <label class="block text-xs font-bold text-gray-500 uppercase">Select Date</label>
+                    <input type="date" id="book-date" class="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm focus:border-primary focus:outline-none transition">
+                </div>
+
+                <div class="space-y-2">
+                    <label class="block text-xs font-bold text-gray-500 uppercase">Select Time</label>
+                    <select id="book-time" class="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm focus:border-primary focus:outline-none transition bg-white">
+                        <option value="09:00">09:00 AM</option>
+                        <option value="10:00">10:00 AM</option>
+                        <option value="11:00">11:00 AM</option>
+                        <option value="13:00">01:00 PM</option>
+                        <option value="14:00">02:00 PM</option>
+                        <option value="15:00">03:00 PM</option>
+                        <option value="16:00">04:00 PM</option>
+                    </select>
+                </div>
+
+                <button onclick="confirmBooking()" id="book-btn" class="w-full bg-primary hover:bg-sky-600 text-white font-bold py-3 rounded-xl transition shadow-lg shadow-sky-500/20">
+                    Confirm Booking
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="doctor-list-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center modal-backdrop p-4">
+        <div class="bg-white w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden animate-[popIn_0.3s_ease-out] flex flex-col max-h-[90vh]">
+            <div class="p-5 border-b border-gray-100 flex justify-between items-center bg-white sticky top-0 z-10">
+                <div>
+                    <h3 class="font-bold text-lg text-secondary">Specialists Available</h3>
+                    <p class="text-xs text-gray-500" id="doctor-modal-subtitle">Finding doctors...</p>
+                </div>
+                <button onclick="closeDoctorModal()" class="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition">
+                    <i class="fa-solid fa-times text-gray-500"></i>
+                </button>
+            </div>
+            
+            <div class="p-6 overflow-y-auto bg-slate-50 flex-1">
+                <div id="doctor-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div class="col-span-full flex justify-center py-10">
+                        <i class="fa-solid fa-circle-notch fa-spin text-primary text-3xl"></i>
+                    </div>
+                </div>
+                
+                <div class="mt-8 text-center border-t border-gray-200 pt-6">
+                    <a href="/doctors" class="inline-flex items-center gap-2 text-primary font-bold hover:text-sky-700 hover:underline transition">
+                        View All Doctors & Specialists <i class="fa-solid fa-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="status-modal" class="hidden fixed inset-0 z-[70] flex items-center justify-center modal-backdrop p-4">
+        <div class="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-6 text-center modal-content relative overflow-hidden">
+            <div id="status-icon-bg" class="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 transition-colors">
+                <i id="status-icon" class="text-3xl"></i>
+            </div>
+            <h3 id="status-title" class="text-xl font-bold text-secondary mb-2"></h3>
+            <p id="status-message" class="text-sm text-gray-500 mb-6"></p>
+            <button onclick="closeStatusModal()" class="w-full py-3 rounded-xl font-bold transition text-white shadow-lg" id="status-btn">Okay</button>
+        </div>
+    </div>
+
+    <script>
+        let currentMedicine = { name: '', instr: '', freq: 1, defaultTimes: [] };
+        let deleteTargetId = null;
+        let selectedDoctor = null;
+
+        function scrollToBottom() {
+            const container = document.getElementById('chat-container');
+            container.scrollTop = container.scrollHeight;
+        }
+
+        async function startNewChat() {
+            try {
+                await fetch('/api/chat/new', { method: 'POST' });
+                
+                document.getElementById('chat-container').innerHTML = `
+                    <div class="chat-bubble ai-bubble">
+                        <div class="flex items-center gap-2 mb-2">
+                            <i class="fa-solid fa-robot text-primary"></i>
+                            <p class="font-bold text-secondary text-xs uppercase tracking-wide">HealthGuard AI</p>
+                        </div>
+                        <p>Hello, {{ user_name }}. I can analyze multiple body locations. Let's start the checkup.</p>
+                    </div>
+                `;
+                document.getElementById('input-area').innerHTML = `
+                    <button onclick="startCheckup()" class="bg-primary hover:bg-sky-600 text-white px-8 py-3.5 rounded-full font-semibold shadow-lg shadow-sky-500/30 transition-all transform hover:-translate-y-1">
+                        <i class="fa-solid fa-stethoscope mr-2"></i> Start Diagnosis
+                    </button>
+                `;
+                document.querySelectorAll('.history-item').forEach(el => el.classList.remove('active'));
+                
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        // --- DELETE LOGIC ---
+        function confirmDelete(event, sessionId) {
+            event.stopPropagation();
+            deleteTargetId = sessionId;
+            document.getElementById('delete-modal').classList.remove('hidden');
+        }
+
+        function closeDeleteModal() {
+            document.getElementById('delete-modal').classList.add('hidden');
+            deleteTargetId = null;
+        }
+
+        async function performDelete() {
+            if (!deleteTargetId) return;
+
+            try {
+                const res = await fetch(`/api/chat/delete/${deleteTargetId}`, { method: 'DELETE' });
+                const data = await res.json();
+
+                if (data.status === 'success') {
+                    const el = document.getElementById(`hist-${deleteTargetId}`);
+                    if (el) el.remove();
+                    closeDeleteModal();
+                    
+                    const activeEl = document.querySelector('.history-item.active');
+                    if (!activeEl) {
+                        startNewChat();
+                    }
+                } else {
+                    alert("Failed to delete chat history.");
+                    closeDeleteModal();
+                }
+            } catch (e) {
+                console.error(e);
+                alert("Error connecting to server.");
+                closeDeleteModal();
+            }
+        }
+
+        async function loadHistory(sessionId) {
+            document.querySelectorAll('.history-item').forEach(el => el.classList.remove('active'));
+            const activeEl = document.getElementById(`hist-${sessionId}`);
+            if (activeEl) activeEl.classList.add('active');
+
+            const container = document.getElementById('chat-container');
+            container.innerHTML = '<div class="flex justify-center p-5"><i class="fa-solid fa-circle-notch fa-spin text-primary text-2xl"></i></div>';
+            
+            try {
+                const res = await fetch(`/api/chat/history/${sessionId}`);
+                const data = await res.json();
+                
+                if(data.status === 'success') {
+                    container.innerHTML = '';
+                    
+                    data.messages.forEach(msg => {
+                        if(msg.sender === 'user') {
+                            addMessage(msg.text, 'user');
+                        } else {
+                            if(msg.data && msg.data.type === 'diagnosis') {
+                                addDiagnosisCard(msg.data.data, msg.data.doctor, msg.data.medicine);
+                            } else {
+                                addMessage(msg.text, 'ai');
+                            }
+                        }
+                    });
+                    
+                    document.getElementById('input-area').innerHTML = `
+                          <button onclick="startNewChat()" class="bg-gray-100 hover:bg-gray-200 text-gray-600 px-8 py-3 rounded-full font-bold transition flex items-center gap-2">
+                             <i class="fa-solid fa-rotate-right"></i> Continue Chat
+                          </button>
+                    `;
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        function addMessage(text, sender) {
+            const container = document.getElementById('chat-container');
+            const bubble = document.createElement('div');
+            bubble.className = `chat-bubble ${sender === 'user' ? 'user-bubble' : 'ai-bubble'}`;
+            
+            let content = '';
+            if (sender === 'ai') {
+                content = `
+                    <div class="flex items-center gap-2 mb-2">
+                        <i class="fa-solid fa-robot text-primary"></i>
+                        <p class="font-bold text-secondary text-xs uppercase tracking-wide">HealthGuard AI</p>
+                    </div>
+                `;
+            }
+            content += `<p class="leading-relaxed text-sm md:text-base">${text}</p>`;
+            
+            bubble.innerHTML = content;
+            container.appendChild(bubble);
+            scrollToBottom();
+        }
+
+        function addDiagnosisCard(data, doctor, medicine) {
+            const container = document.getElementById('chat-container');
+            const card = document.createElement('div');
+            card.className = "max-w-2xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100 mt-6 mb-10 animation-popIn";
+            
+            const docName = doctor ? doctor.name : "Specialist";
+            const docHosp = doctor ? doctor.hospital : "General Hospital";
+            const docRate = doctor ? doctor.rating : "4.5";
+            const docPrice = doctor ? "Rp " + doctor.price.toLocaleString('id-ID') : "Contact Hospital";
+            const docSpecialty = doctor ? doctor.specialty : "General";
+            const docId = doctor ? doctor.id : 0;
+            const docImage = (doctor && doctor.image) ? doctor.image : "https://via.placeholder.com/150";
+            const rawPrice = doctor ? doctor.price : 0;
+            
+            const medName = medicine ? medicine.name : "Consult Doctor";
+            const medDose = medicine ? medicine.dosage : "";
+            const medInstr = medicine ? medicine.instruction : "Please consult a doctor.";
+            
+            const medFreq = medicine ? medicine.times_per_day : 1;
+            const medDefaults = medicine ? medicine.default_times : ["08:00"];
+
+            const safeMedName = medName.replace(/'/g, "\\'");
+            const safeInstr = medInstr.replace(/'/g, "\\'");
+            const safeDefaults = JSON.stringify(medDefaults).replace(/"/g, "&quot;");
+            const safeSpecialty = docSpecialty.replace(/'/g, "\\'");
+            const safeDocName = docName.replace(/'/g, "\\'");
+            const safeDocHosp = docHosp.replace(/'/g, "\\'");
+
+            card.innerHTML = `
+                <div class="bg-red-50 p-5 border-l-4 border-red-500">
+                    <div class="flex items-center gap-3 mb-1">
+                        <i class="fa-solid fa-circle-exclamation text-red-500 text-xl"></i>
+                        <h3 class="text-red-600 font-bold text-lg">Diagnosis: ${data.title}</h3>
+                    </div>
+                    <p class="text-sm text-gray-600 leading-relaxed ml-8">${data.description}</p>
+                </div>
+                
+                <div class="p-6 grid md:grid-cols-2 gap-6 bg-white">
+                    
+                    <div class="flex flex-col">
+                        <p class="text-xs font-bold text-gray-400 uppercase mb-3 tracking-wider">Recommended Specialist</p>
+                        <div class="bg-white border border-gray-100 rounded-xl p-4 hover:shadow-md transition relative overflow-hidden group flex-1 flex flex-col justify-between">
+                            <div>
+                                <div class="absolute top-0 right-0 bg-yellow-400 text-secondary text-[10px] font-bold px-2 py-1 rounded-bl-lg">BEST MATCH</div>
+                                <div class="flex items-center gap-3 mb-3">
+                                    <div class="w-12 h-12 rounded-full overflow-hidden flex-shrink-0 border border-gray-100">
+                                        <img src="${docImage}" alt="${docName}" class="w-full h-full object-cover">
+                                    </div>
+                                    <div>
+                                        <p class="font-bold text-secondary text-sm">${docName}</p>
+                                        <p class="text-xs text-gray-500">${docHosp}</p>
+                                    </div>
+                                </div>
+                                <div class="flex justify-between text-xs text-gray-500 border-t border-gray-50 pt-2 items-center">
+                                    <span class="flex items-center gap-1"><i class="fa-solid fa-star text-yellow-400"></i> ${docRate}</span>
+                                    <span class="font-bold text-green-600">${docPrice}</span>
+                                </div>
+                            </div>
+                            
+                            <div class="mt-3">
+                                <button onclick="openBookingModal('${safeDocName}', '${safeSpecialty}', '${safeDocHosp}', ${rawPrice}, '${docImage}')" class="w-full bg-secondary text-white text-xs font-semibold py-2.5 rounded-lg hover:bg-slate-800 transition">Book Appointment</button>
+                                
+                                <button onclick="openDoctorModal('${safeSpecialty}', ${docId})" class="w-full mt-2 bg-white border border-gray-200 text-gray-500 text-xs font-semibold py-2 rounded-lg hover:bg-gray-50 hover:text-primary transition flex items-center justify-center gap-2">
+                                    See More ${docSpecialty}s <i class="fa-solid fa-chevron-right text-[10px]"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col">
+                        <p class="text-xs font-bold text-gray-400 uppercase mb-3 tracking-wider">Prescribed Medication</p>
+                        <div class="bg-sky-50 border border-sky-100 rounded-xl p-4 flex-1 flex flex-col justify-between">
+                            <div>
+                                <div class="flex justify-between items-start mb-2">
+                                    <div>
+                                        <h4 class="font-bold text-secondary text-sm">${medName}</h4>
+                                        <span class="text-[10px] font-semibold bg-white text-primary px-2 py-0.5 rounded border border-sky-200 inline-block mt-1">${medDose}</span>
+                                    </div>
+                                    <i class="fa-solid fa-pills text-primary text-xl opacity-50"></i>
+                                </div>
+                                <p class="text-xs text-gray-600 italic mb-4">"${medInstr}"</p>
+                            </div>
+                            
+                            <button onclick="openScheduleModal('${safeMedName}', '${safeInstr}', ${medFreq}, ${safeDefaults})" class="w-full flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white text-xs font-bold py-2.5 rounded-lg transition shadow-lg shadow-green-500/20">
+                                <i class="fa-brands fa-whatsapp text-base"></i> Set Reminder
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-gray-50 p-3 text-[10px] text-center text-gray-400 border-t border-gray-100">
+                    AI Analysis is preliminary. Based on physical symptoms provided.
+                </div>
+            `;
+            
+            container.appendChild(card);
+            scrollToBottom();
+            
+            const inputArea = document.getElementById('input-area');
+            inputArea.innerHTML = `
+                <button onclick="startNewChat()" class="bg-gray-100 hover:bg-gray-200 text-gray-600 px-8 py-3 rounded-full font-bold transition flex items-center gap-2">
+                    <i class="fa-solid fa-plus"></i> New Consultation
+                </button>
+            `;
+        }
+
+        // --- BOOKING LOGIC (COPIED FROM DOCTORS PAGE FOR CHAT USE) ---
+        function openBookingModal(name, specialty, hospital, price, image) {
+            selectedDoctor = { name, specialty, hospital, price, image };
+            
+            document.getElementById('modal-doc-name').innerText = name;
+            document.getElementById('modal-doc-spec').innerText = specialty;
+            document.getElementById('modal-doc-price').innerText = "Rp " + price.toLocaleString('id-ID');
+            document.getElementById('modal-doc-img').src = image;
+            
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            document.getElementById('book-date').valueAsDate = tomorrow;
+
+            document.getElementById('booking-modal').classList.remove('hidden');
+        }
+
+        function closeBookingModal() {
+            document.getElementById('booking-modal').classList.add('hidden');
+        }
+
+        async function confirmBooking() {
+            const btn = document.getElementById('book-btn');
+            const date = document.getElementById('book-date').value;
+            const time = document.getElementById('book-time').value;
+
+            if(!date || !time) return alert("Please select date and time");
+
+            btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Booking...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/api/appointments/book', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        doctor_name: selectedDoctor.name,
+                        doctor_specialty: selectedDoctor.specialty,
+                        doctor_image: selectedDoctor.image,
+                        hospital: selectedDoctor.hospital,
+                        price: selectedDoctor.price,
+                        date: date,
+                        time: time
+                    })
+                });
+                const data = await res.json();
+
+                if(data.status === 'success') {
+                    closeBookingModal();
+                    // FIXED: Uses nice modal instead of alert
+                    openStatusModal('success', 'Booking Confirmed!', 'Appointment saved to your profile.');
+                } else {
+                    openStatusModal('error', 'Booking Failed', data.message || 'Could not book appointment.');
+                }
+            } catch(e) {
+                console.error(e);
+                openStatusModal('error', 'System Error', 'Connection failed. Please check console.');
+            } finally {
+                btn.innerHTML = 'Confirm Booking';
+                btn.disabled = false;
+            }
+        }
+
+        // --- DOCTOR MODAL LOGIC ---
+        async function openDoctorModal(specialty, excludeId) {
+            const modal = document.getElementById('doctor-list-modal');
+            const grid = document.getElementById('doctor-grid');
+            const subtitle = document.getElementById('doctor-modal-subtitle');
+            
+            modal.classList.remove('hidden');
+            subtitle.innerText = `Searching for ${specialty}s...`;
+            const seeAllDiv = grid.nextElementSibling; 
+            grid.innerHTML = '<div class="col-span-full flex justify-center py-10"><i class="fa-solid fa-circle-notch fa-spin text-primary text-3xl"></i></div>';
+            
+            try {
+                const res = await fetch('/api/doctors/get_by_specialty', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ specialty: specialty, exclude_id: excludeId })
+                });
+                const data = await res.json();
+                
+                if (data.status === 'success') {
+                    renderDoctorList(data.doctors);
+                    subtitle.innerText = `Found ${data.doctors.length} specialist(s)`;
+                } else {
+                    grid.innerHTML = '<div class="col-span-full text-center text-gray-500">Could not load doctors.</div>';
+                }
+            } catch (e) {
+                console.error(e);
+                grid.innerHTML = '<div class="col-span-full text-center text-red-500">Connection Error</div>';
+            }
+        }
+
+        function closeDoctorModal() {
+            document.getElementById('doctor-list-modal').classList.add('hidden');
+        }
+
+        function renderDoctorList(doctors) {
+            const grid = document.getElementById('doctor-grid');
+            if (doctors.length === 0) {
+                grid.innerHTML = '<div class="col-span-full text-center text-gray-500 py-10">No other specialists found at this time.</div>';
+                return;
+            }
+            
+            let html = '';
+            doctors.forEach(doc => {
+                const img = doc.image ? doc.image : "https://via.placeholder.com/150";
+                
+                const safeName = doc.name.replace(/'/g, "\\'");
+                const safeSpec = doc.specialty.replace(/'/g, "\\'");
+                const safeHosp = doc.hospital.replace(/'/g, "\\'");
+                
+                html += `
+                <div class="bg-white border border-gray-100 rounded-xl p-4 hover:shadow-lg transition flex flex-col items-center text-center group">
+                    <div class="w-20 h-20 rounded-full overflow-hidden border-2 border-white shadow-md mb-3 group-hover:scale-105 transition">
+                        <img src="${img}" alt="${doc.name}" class="w-full h-full object-cover">
+                    </div>
+                    <h4 class="font-bold text-secondary text-sm">${doc.name}</h4>
+                    <p class="text-xs text-primary font-medium mb-1">${doc.specialty}</p>
+                    <p class="text-xs text-gray-500 mb-3"><i class="fa-regular fa-hospital mr-1"></i> ${doc.hospital}</p>
+                    
+                    <div class="w-full flex items-center justify-between text-xs border-t border-gray-50 pt-3 mt-auto">
+                        <span class="flex items-center text-yellow-500 font-bold gap-1"><i class="fa-solid fa-star"></i> ${doc.rating}</span>
+                        <span class="font-bold text-green-600">Rp ${doc.price.toLocaleString('id-ID')}</span>
+                    </div>
+                    
+                    <button onclick="openBookingModal('${safeName}', '${safeSpec}', '${safeHosp}', ${doc.price}, '${img}')" class="w-full mt-3 bg-secondary hover:bg-primary text-white text-xs font-bold py-2 rounded-lg transition">Book Now</button>
+                </div>
+                `;
+            });
+            grid.innerHTML = html;
+        }
+
+        async function processChat(answer) {
+            if(answer !== null) addMessage(answer, 'user');
+
+            document.getElementById('input-area').innerHTML = `
+                <div class="flex items-center gap-3 text-gray-400 bg-white px-4 py-2 rounded-full border border-gray-100 shadow-sm animate-pulse">
+                    <div class="w-2 h-2 bg-primary rounded-full animate-bounce"></div>
+                    <div class="w-2 h-2 bg-primary rounded-full animate-bounce delay-75"></div>
+                    <div class="w-2 h-2 bg-primary rounded-full animate-bounce delay-150"></div>
+                    <span class="text-xs font-medium uppercase tracking-wide">Thinking</span>
+                </div>
+            `;
+
+            try {
+                const res = await fetch('/api/chat/process', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ answer: answer })
+                });
+                
+                if (!res.ok) throw new Error("Server Error");
+                
+                const data = await res.json();
+
+                if (data.type === 'diagnosis') {
+                    addDiagnosisCard(data.data, data.doctor, data.medicine);
+                } else if (data.type === 'error') {
+                    addMessage("I am sorry, something went wrong. Let us start over.", 'ai');
+                    setTimeout(() => startNewChat(), 2000);
+                } else {
+                    setTimeout(() => {
+                        addMessage(data.question, 'ai');
+                        renderInputOptions(data);
+                    }, 500);
+                }
+
+            } catch (e) { 
+                console.error(e); 
+                document.getElementById('input-area').innerHTML = '<p class="text-red-500 text-sm font-bold"><i class="fa-solid fa-wifi mr-2"></i>Connection Error. Please refresh.</p>';
+            }
+        }
+
+        function renderInputOptions(node) {
+            const inputArea = document.getElementById('input-area');
+            inputArea.innerHTML = '';
+
+            if (node.type === 'option') {
+                node.options.forEach(opt => {
+                    const label = typeof opt === 'string' ? opt : opt.label;
+                    const btn = document.createElement('button');
+                    btn.className = "bg-white border border-gray-200 hover:border-primary hover:bg-sky-50 hover:text-primary text-gray-600 px-6 py-2.5 rounded-full font-medium transition shadow-sm hover:shadow-md text-sm";
+                    btn.innerText = label;
+                    btn.onclick = () => processChat(label);
+                    inputArea.appendChild(btn);
+                });
+            } 
+            else if (node.type === 'yes_no') {
+                ['Yes', 'No'].forEach(val => {
+                    const btn = document.createElement('button');
+                    const isYes = val === 'Yes';
+                    btn.className = `px-10 py-2.5 rounded-full font-bold transition shadow-md text-sm ${isYes ? 'bg-primary text-white hover:bg-sky-600 shadow-sky-200' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`;
+                    btn.innerHTML = isYes ? '<i class="fa-solid fa-check mr-2"></i>Yes' : '<i class="fa-solid fa-xmark mr-2"></i>No';
+                    btn.onclick = () => processChat(val);
+                    inputArea.appendChild(btn);
+                });
+            }
+            else if (node.type === 'scale') {
+                for(let i=1; i<=10; i++) {
+                    const btn = document.createElement('button');
+                    let colorClass = "border-gray-300 hover:border-primary hover:text-primary";
+                    if (i > 7) colorClass = "border-red-200 hover:border-red-500 hover:text-red-500 hover:bg-red-50";
+                    
+                    btn.className = `w-10 h-10 rounded-full border ${colorClass} bg-white flex items-center justify-center transition font-bold text-sm shadow-sm hover:shadow-md`;
+                    btn.innerText = i;
+                    btn.onclick = () => processChat(i);
+                    inputArea.appendChild(btn);
+                }
+            }
+            else if (node.type === 'number') {
+                inputArea.innerHTML = `
+                    <div class="flex items-center gap-2 bg-white p-1 rounded-xl shadow-lg border border-gray-100">
+                        <input type="number" id="num-input" class="rounded-lg px-4 py-2 w-24 focus:outline-none text-center font-bold text-secondary" placeholder="0">
+                        <button onclick="processChat(document.getElementById('num-input').value)" class="bg-primary text-white w-10 h-10 rounded-lg flex items-center justify-center hover:bg-sky-600 transition"><i class="fa-solid fa-paper-plane"></i></button>
+                    </div>
+                `;
+            }
+        }
+
+        function openScheduleModal(name, instr, freq, defaultTimes) {
+            currentMedicine = { name, instr, freq, defaultTimes };
+            
+            document.getElementById('modal-med-name').innerText = name;
+            document.getElementById('modal-instruction').innerText = instr;
+            
+            const today = new Date().toISOString().split('T')[0];
+            const nextWeek = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+            document.getElementById('start-date').value = today;
+            document.getElementById('end-date').value = nextWeek;
+
+            const container = document.getElementById('time-inputs-container');
+            container.innerHTML = '';
+            
+            const loopCount = freq > 0 ? freq : 1; 
+
+            for(let i=0; i<loopCount; i++) {
+                const timeDiv = document.createElement('div');
+                const defaultVal = (defaultTimes && defaultTimes[i]) ? defaultTimes[i] : "08:00";
+                
+                timeDiv.innerHTML = `
+                    <div class="relative">
+                        <i class="fa-regular fa-clock absolute left-3 top-3 text-gray-400 text-xs"></i>
+                        <input type="time" class="schedule-time-input w-full border border-gray-200 bg-gray-50 rounded-lg pl-8 pr-2 py-2 text-sm focus:border-primary focus:outline-none transition" value="${defaultVal}">
+                    </div>
+                `;
+                container.appendChild(timeDiv);
+            }
+
+            document.getElementById('schedule-modal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('schedule-modal').classList.add('hidden');
+        }
+
+        async function confirmSchedule() {
+            const btn = document.getElementById('confirm-btn');
+            const originalContent = btn.innerHTML;
+            btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Scheduling...';
+            btn.disabled = true;
+            btn.classList.add('opacity-75', 'cursor-not-allowed');
+
+            const startDate = document.getElementById('start-date').value;
+            const endDate = document.getElementById('end-date').value;
+            const timeInputs = document.querySelectorAll('.schedule-time-input');
+            const times = Array.from(timeInputs).map(input => input.value);
+
+            try {
+                const res = await fetch('/api/schedule_reminders', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        medicine_name: currentMedicine.name,
+                        instruction: currentMedicine.instr,
+                        start_date: startDate,
+                        end_date: endDate,
+                        times: times
+                    })
+                });
+
+                const data = await res.json();
+                
+                if (data.status === 'success') {
+                    btn.classList.remove('bg-primary', 'hover:bg-sky-600');
+                    btn.classList.add('bg-green-500');
+                    btn.innerHTML = '<i class="fa-solid fa-check"></i> Success!';
+                    setTimeout(() => {
+                        closeModal();
+                        setTimeout(() => {
+                            btn.innerHTML = originalContent;
+                            btn.classList.remove('bg-green-500');
+                            btn.classList.add('bg-primary');
+                            btn.disabled = false;
+                            btn.classList.remove('opacity-75', 'cursor-not-allowed');
+                        }, 500);
+                    }, 1000);
+                } else {
+                    alert('Error: ' + data.message);
+                    btn.innerHTML = originalContent;
+                    btn.disabled = false;
+                    btn.classList.remove('opacity-75', 'cursor-not-allowed');
+                }
+            } catch (e) {
+                console.error(e);
+                alert('Connection error');
+                btn.innerHTML = originalContent;
+                btn.disabled = false;
+                btn.classList.remove('opacity-75', 'cursor-not-allowed');
+            } 
+        }
+
+        function startCheckup() {
+            processChat(null);
+        }
+
+        // --- NEW STATUS MODAL FUNCTIONS ---
+        function openStatusModal(type, title, message) {
+            const modal = document.getElementById('status-modal');
+            const iconBg = document.getElementById('status-icon-bg');
+            const icon = document.getElementById('status-icon');
+            const titleEl = document.getElementById('status-title');
+            const msgEl = document.getElementById('status-message');
+            const btn = document.getElementById('status-btn');
+
+            titleEl.innerText = title;
+            msgEl.innerText = message;
+
+            if (type === 'success') {
+                iconBg.className = "w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 bg-green-100 text-green-500";
+                icon.className = "fa-solid fa-check";
+                btn.className = "w-full py-3 rounded-xl font-bold transition text-white shadow-lg bg-green-500 hover:bg-green-600 shadow-green-500/30";
+            } else {
+                iconBg.className = "w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 bg-red-100 text-red-500";
+                icon.className = "fa-solid fa-xmark";
+                btn.className = "w-full py-3 rounded-xl font-bold transition text-white shadow-lg bg-red-500 hover:bg-red-600 shadow-red-500/30";
+            }
+
+            modal.classList.remove('hidden');
+        }
+
+        function closeStatusModal() {
+            document.getElementById('status-modal').classList.add('hidden');
+        }
+    </script>
+</body>
+</html>

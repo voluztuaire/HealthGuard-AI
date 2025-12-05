@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auth - HealthGuard AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Poppins', 'sans-serif'] },
+                    colors: {
+                        primary: '#0ea5e9',
+                        secondary: '#0f172a',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+        }
+        
+        /* Glassmorphism Card */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+        }
+
+        /* Scan Line Animation */
+        .scan-line {
+            width: 100%;
+            height: 2px;
+            background: #0ea5e9;
+            position: absolute;
+            z-index: 10;
+            animation: scan 2s infinite linear;
+            box-shadow: 0 0 10px #0ea5e9;
+        }
+
+        @keyframes scan {
+            0% { top: 0%; opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { top: 100%; opacity: 0; }
+        }
+
+        .lighting-overlay {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 20;
+            transition: background-color 0.5s ease;
+            mix-blend-mode: overlay;
+        }
+
+        /* --- FIXED: Mirror Effect for Camera --- */
+        .mirror {
+            transform: scaleX(-1);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+
+    <div class="glass-card w-full max-w-4xl rounded-3xl overflow-hidden flex flex-col md:flex-row shadow-2xl relative">
+        
+        <div id="screen-flash" class="lighting-overlay opacity-0"></div>
+
+        <div class="md:w-1/2 bg-sky-50/50 p-8 flex flex-col items-center justify-center relative min-h-[400px]">
+            
+            <div id="auth-illustration" class="text-center">
+                <div class="w-24 h-24 bg-white/80 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
+                    <i class="fa-solid fa-shield-halved text-4xl text-primary"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-secondary">Secure Access</h2>
+                <p class="text-gray-500 mt-2 text-sm">AI-Powered Biometric Security</p>
+            </div>
+
+            <div id="camera-container" class="hidden w-full h-full absolute inset-0 bg-black flex flex-col items-center justify-center">
+                <video id="video" class="mirror absolute w-full h-full object-cover opacity-80" autoplay playsinline></video>
+                <canvas id="canvas" class="hidden"></canvas>
+                
+                <div class="relative w-64 h-64 border-2 border-primary/50 rounded-full z-10 overflow-hidden">
+                    <div class="scan-line hidden" id="scan-line"></div>
+                </div>
+
+                <div class="z-20 mt-8 text-center">
+                    <p id="camera-status" class="text-white font-bold tracking-widest uppercase text-sm animate-pulse">Initializing Camera...</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="md:w-1/2 p-8 md:p-12 relative">
+            
+            <div id="login-form" class="transition-all duration-300">
+                <div class="flex justify-between items-center mb-8">
+                    <h2 class="text-2xl font-bold text-secondary">Welcome Back</h2>
+                    <i class="fa-solid fa-heart-pulse text-2xl text-primary"></i>
+                </div>
+
+                <div class="flex bg-white/50 p-1 rounded-xl mb-6">
+                    <button onclick="switchLoginMode('email')" id="tab-email" class="flex-1 py-2 rounded-lg text-sm font-semibold bg-white shadow-sm text-primary transition">Email</button>
+                    <button onclick="switchLoginMode('face')" id="tab-face" class="flex-1 py-2 rounded-lg text-sm font-semibold text-gray-500 hover:text-secondary transition">Face ID</button>
+                </div>
+
+                <div id="email-login-inputs">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Email</label>
+                            <input type="email" id="login-email" class="w-full px-4 py-3 rounded-lg bg-white/50 border border-transparent focus:border-primary focus:bg-white focus:outline-none transition" placeholder="name@example.com">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Password</label>
+                            <input type="password" id="login-password" class="w-full px-4 py-3 rounded-lg bg-white/50 border border-transparent focus:border-primary focus:bg-white focus:outline-none transition" placeholder="••••••••">
+                        </div>
+                        <button onclick="handleEmailLogin()" class="w-full bg-secondary hover:bg-slate-800 text-white font-bold py-3 rounded-lg transition shadow-lg mt-4">
+                            Sign In
+                        </button>
+                    </div>
+                </div>
+
+                <div id="face-login-inputs" class="hidden text-center py-10">
+                    <p class="text-gray-600 mb-4">Look directly at the camera to login.</p>
+                    <div class="animate-bounce text-primary text-2xl">
+                        <i class="fa-solid fa-arrow-left md:hidden"></i>
+                        <i class="fa-solid fa-arrow-left hidden md:inline-block"></i> 
+                        </div>
+                </div>
+
+                <div class="mt-8 text-center text-sm text-gray-500">
+                    Don't have an account? <a href="#" onclick="showRegister()" class="text-primary font-bold hover:underline">Register</a>
+                </div>
+            </div>
+
+            <div id="register-form" class="hidden transition-all duration-300">
+                <h2 class="text-2xl font-bold text-secondary mb-6">Create Account</h2>
+                
+            <div class="space-y-3 h-[320px] overflow-y-auto overflow-x-hidden pr-2 custom-scrollbar">                    <input type="text" id="reg-name" class="w-full px-4 py-3 rounded-lg bg-white/50 focus:bg-white border-transparent focus:border-primary focus:outline-none" placeholder="Full Name">
+                    <input type="email" id="reg-email" class="w-full px-4 py-3 rounded-lg bg-white/50 focus:bg-white border-transparent focus:border-primary focus:outline-none" placeholder="Email Address">
+                    <div class="flex items-center w-full">
+                        <div class="bg-gray-200/80 border border-transparent rounded-l-lg px-4 py-3 text-gray-600 font-bold text-sm select-none">
+                            +62
+                        </div>
+                        <input type="tel" id="reg-phone" class="flex-1 px-4 py-3 rounded-r-lg bg-white/50 focus:bg-white border-transparent focus:border-primary focus:outline-none" placeholder="8xx-xxxx-xxxx">
+                    </div>                    <input type="password" id="reg-pass" class="w-full px-4 py-3 rounded-lg bg-white/50 focus:bg-white border-transparent focus:border-primary focus:outline-none" placeholder="Password">
+                    <input type="password" id="reg-confirm-pass" class="w-full px-4 py-3 rounded-lg bg-white/50 focus:bg-white border-transparent focus:border-primary focus:outline-none" placeholder="Confirm Password">
+                </div>
+
+                <button onclick="handleRegisterStep1()" class="w-full bg-primary hover:bg-sky-600 text-white font-bold py-3 rounded-lg transition shadow-lg mt-6">
+                    Next: Biometric Setup <i class="fa-solid fa-arrow-right ml-2"></i>
+                </button>
+
+                <div class="mt-4 text-center text-sm text-gray-500">
+                    Already have an account? <a href="#" onclick="showLogin()" class="text-primary font-bold hover:underline">Sign In</a>
+                </div>
+            </div>
+
+            <div id="training-status" class="hidden text-center pt-10">
+                <h3 class="text-xl font-bold text-secondary mb-2">Calibrating AI Model</h3>
+                <p class="text-sm text-gray-500 mb-6">Please keep your face still and follow the lighting.</p>
+                
+                <div class="w-full bg-gray-200 rounded-full h-4 mb-4 overflow-hidden">
+                    <div id="training-progress" class="bg-primary h-4 rounded-full transition-all duration-300" style="width: 0%"></div>
+                </div>
+                <p id="progress-text" class="text-xs font-bold text-primary">0%</p>
+            </div>
+
+        </div>
+    </div>
+
+<script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        let stream = null;
+        let isTraining = false;
+        let isScanning = false;
+        
+        // --- UPDATE 1: BATASI ATTEMPT BIAR GAK LAMA ---
+        let scanAttempts = 0;
+        const MAX_ATTEMPTS = 8; // Cuma 8x coba (sekitar 5-8 detik), kalau gagal langsung stop.
+
+        // --- UI SWITCHING ---
+        function showRegister() {
+            document.getElementById('login-form').classList.add('hidden');
+            document.getElementById('register-form').classList.remove('hidden');
+            stopCamera();
+        }
+
+        function showLogin() {
+            document.getElementById('register-form').classList.add('hidden');
+            document.getElementById('login-form').classList.remove('hidden');
+            document.getElementById('training-status').classList.add('hidden');
+            stopCamera();
+        }
+
+        function switchLoginMode(mode) {
+            const emailInput = document.getElementById('email-login-inputs');
+            const faceInput = document.getElementById('face-login-inputs');
+            const tabEmail = document.getElementById('tab-email');
+            const tabFace = document.getElementById('tab-face');
+
+            if (mode === 'email') {
+                emailInput.classList.remove('hidden');
+                faceInput.classList.add('hidden');
+                tabEmail.classList.add('bg-white', 'shadow-sm', 'text-primary');
+                tabEmail.classList.remove('text-gray-500');
+                tabFace.classList.remove('bg-white', 'shadow-sm', 'text-primary');
+                tabFace.classList.add('text-gray-500');
+                stopCamera();
+            } else {
+                emailInput.classList.add('hidden');
+                faceInput.classList.remove('hidden');
+                tabFace.classList.add('bg-white', 'shadow-sm', 'text-primary');
+                tabFace.classList.remove('text-gray-500');
+                tabEmail.classList.remove('bg-white', 'shadow-sm', 'text-primary');
+                tabEmail.classList.add('text-gray-500');
+                startCamera(true); // true = login mode
+            }
+        }
+
+        // --- CAMERA LOGIC ---
+        async function startCamera(isLoginMode) {
+            try {
+                document.getElementById('auth-illustration').classList.add('hidden');
+                document.getElementById('camera-container').classList.remove('hidden');
+                
+                stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+                video.srcObject = stream;
+
+                if (isLoginMode) {
+                    document.getElementById('camera-status').innerText = "SCANNING FACE...";
+                    document.getElementById('camera-status').className = "text-white font-bold tracking-widest uppercase text-sm animate-pulse";
+                    document.getElementById('scan-line').classList.remove('hidden');
+                    
+                    // --- RESET COUNTER ---
+                    isScanning = true;
+                    scanAttempts = 0; 
+                    scanFaceLoop();
+                }
+            } catch (err) {
+                alert("Camera access denied. Please enable camera permissions.");
+            }
+        }
+
+        function stopCamera() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+            document.getElementById('camera-container').classList.add('hidden');
+            document.getElementById('auth-illustration').classList.remove('hidden');
+            document.getElementById('scan-line').classList.add('hidden');
+            isScanning = false;
+            isTraining = false;
+        }
+
+        function captureFrame() {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            return canvas.toDataURL('image/jpeg');
+        }
+
+        // --- REGISTRATION LOGIC ---
+
+        async function handleRegisterStep1() {
+            const name = document.getElementById('reg-name').value;
+            const email = document.getElementById('reg-email').value;
+            
+            const rawPhone = document.getElementById('reg-phone').value;
+            const cleanPhone = rawPhone.startsWith('0') ? rawPhone.substring(1) : rawPhone;
+            const phone = "+62" + cleanPhone;
+
+            const pass = document.getElementById('reg-pass').value;
+            const confirm = document.getElementById('reg-confirm-pass').value;
+            if (pass !== confirm) return alert("Passwords do not match");
+
+            const res = await fetch('/api/register_step1', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ name, email, phone, password: pass })
+            });
+            const data = await res.json();
+
+            if (data.status === 'success') {
+                document.getElementById('register-form').classList.add('hidden');
+                document.getElementById('training-status').classList.remove('hidden');
+                startFaceTraining();
+            } else {
+                alert(data.message);
+            }
+        }
+
+        let trainingInterval = null; 
+
+        async function startFaceTraining() {
+            await startCamera(false);
+            isTraining = true;
+            
+            const overlay = document.getElementById('screen-flash');
+            const progressBar = document.getElementById('training-progress');
+            const progressText = document.getElementById('progress-text');
+            const statusText = document.getElementById('camera-status');
+            
+            let capturedCount = 0;
+            const totalFrames = 50; 
+            
+            overlay.className = `lighting-overlay opacity-20 bg-white`;
+
+            if (trainingInterval) clearInterval(trainingInterval);
+
+            trainingInterval = setInterval(async () => {
+                if (!isTraining || capturedCount >= totalFrames) {
+                    clearInterval(trainingInterval);
+                    if (capturedCount >= totalFrames) {
+                        statusText.innerText = "PROCESSING BIOMETRIC DATA...";
+                        finishTraining();
+                    }
+                    return;
+                }
+
+                // --- BANK STYLE INSTRUCTIONS ---
+                let instruction = "";
+                let progress = (capturedCount / totalFrames) * 100;
+
+                if (progress < 20) {
+                    instruction = "LOOK STRAIGHT";
+                    statusText.className = "text-white font-bold tracking-widest uppercase text-sm animate-pulse";
+                } else if (progress < 40) {
+                    instruction = "TURN HEAD LEFT SLIGHTLY <";
+                    statusText.className = "text-yellow-400 font-bold tracking-widest uppercase text-lg";
+                } else if (progress < 60) {
+                    instruction = "> TURN HEAD RIGHT SLIGHTLY";
+                    statusText.className = "text-yellow-400 font-bold tracking-widest uppercase text-lg";
+                } else if (progress < 80) {
+                    instruction = "^ TILT HEAD UP";
+                    statusText.className = "text-yellow-400 font-bold tracking-widest uppercase text-lg";
+                } else {
+                    instruction = "SMILE :)";
+                    statusText.className = "text-green-400 font-bold tracking-widest uppercase text-lg";
+                }
+                statusText.innerText = instruction;
+
+                if (capturedCount % 10 === 0) {
+                    overlay.className = `lighting-overlay opacity-30 bg-white`;
+                    setTimeout(() => overlay.className = `lighting-overlay opacity-0`, 200);
+                }
+                
+                const imageBase64 = captureFrame();
+                
+                try {
+                    const res = await fetch('/api/register_face_training', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ image: imageBase64 })
+                    });
+                    
+                    const data = await res.json();
+                    if(data.status === 'success') {
+                        capturedCount++;
+                        let percent = Math.floor((capturedCount / totalFrames) * 100);
+                        progressBar.style.width = percent + "%";
+                        progressText.innerText = percent + "%";
+                    }
+                } catch(e) { console.log(e); }
+
+            }, 200); 
+        }
+
+        async function finishTraining() {
+            document.getElementById('screen-flash').className = "lighting-overlay opacity-0";
+            const statusText = document.getElementById('camera-status');
+            
+            statusText.innerText = "FINALIZING REGISTRATION...";
+            statusText.classList.remove('text-white');
+            statusText.classList.add('text-blue-400', 'font-bold'); 
+            
+            try {
+                const res = await fetch('/api/finalize_registration', { method: 'POST' });
+                const data = await res.json();
+                
+                if (data.status === 'success') {
+                    statusText.innerText = "SUCCESS! REDIRECTING...";
+                    statusText.classList.remove('text-blue-400');
+                    statusText.classList.add('text-green-500');
+                    
+                    setTimeout(() => {
+                        window.location.href = data.redirect;
+                    }, 1000);
+                } else {
+                    alert(data.message || "Registration failed.");
+                    window.location.reload(); 
+                }
+            } catch (e) {
+                console.error(e);
+                alert("Server Error during finalization.");
+                window.location.reload();
+            }
+        }
+
+        // --- UPDATE 2: FACE LOGIN LOGIC (CEPAT PUTUS ASA) ---
+        async function scanFaceLoop() {
+            if (!isScanning) return;
+
+            // --- STOP IF TOO MANY ATTEMPTS ---
+            if (scanAttempts >= MAX_ATTEMPTS) {
+                stopCamera();
+                const statusText = document.getElementById('camera-status');
+                
+                // Ganti pesan di layar jadi Merah
+                // statusText.innerText = "FACE NOT RECOGNIZED"; // Teks ini ada di dalam div camera yang udah di-hide stopCamera()
+                
+                // Tampilkan Alert Browser (Popup Sederhana & Efektif)
+                alert("Face not recognized. Please use password or try again in better lighting.");
+                
+                return;
+            }
+
+            scanAttempts++; // Nambah terus tiap loop
+            const imageBase64 = captureFrame();
+
+            try {
+                const res = await fetch('/api/login_face', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ image: imageBase64 })
+                });
+                const data = await res.json();
+
+                if (data.status === 'success') {
+                    const statusText = document.getElementById('camera-status');
+                    statusText.innerText = `WELCOME, ${data.user.toUpperCase()}`;
+                    statusText.classList.remove('text-white');
+                    statusText.classList.add('text-green-500');
+                    
+                    setTimeout(() => {
+                        window.location.href = data.redirect;
+                    }, 1000);
+                    return; 
+                } 
+            } catch (e) { console.log("Scanning..."); }
+
+            if (isScanning) {
+                // Interval agak dipercepat biar 8 attempt gak kelamaan
+                setTimeout(scanFaceLoop, 400); 
+            }
+        }
+
+        // --- PASSWORD LOGIN ---
+        async function handleEmailLogin() {
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            
+            const res = await fetch('/api/login_password', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ email, password })
+            });
+            const data = await res.json();
+            
+            if (data.status === 'success') {
+                window.location.href = data.redirect;
+            } else {
+                alert("Invalid Credentials");
+            }
+        }
+    </script>
+</body>
+</html>
